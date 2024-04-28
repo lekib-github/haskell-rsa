@@ -33,8 +33,8 @@ primeDecomp n s
 fastRecSquareMod :: Integer -> Integer -> Integer -> Integer
 fastRecSquareMod _ 0 _ = 1
 fastRecSquareMod x n m
-    | even n = fastRecSquareMod (x^2 `rem` m) (n `div` 2) m
-    | otherwise = (x * fastRecSquareMod (x^2 `rem` m) ((n-1) `div` 2) m) `mod` m
+    | even n = fastRecSquareMod (x^2 `mod` m) (n `div` 2) m
+    | otherwise = (x * fastRecSquareMod (x^2 `mod` m) ((n-1) `div` 2) m) `mod` m
 
 -- Miller-Rabin Monte Carlo primality test
 mrPrimeTest :: Integer -> Integer -> StdGen -> Bool
