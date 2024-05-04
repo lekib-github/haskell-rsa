@@ -1,6 +1,7 @@
 import Prelude hiding (gcd)
 import System.Random
 import Data.Char
+import System.Environment
 
 -- Euclid's algorithm for GCD
 gcd :: Integer -> Integer -> Integer
@@ -87,7 +88,6 @@ encrypt (exp, key) msg =
             in show (fastRecSquareMod (asciiToNum (fst split)) exp key) ++ (' ' : process (snd split))
     in process msg
 
-
 splitOn :: Char -> String -> [String]
 splitOn _ "" = []
 splitOn delim str =
@@ -103,11 +103,39 @@ decrypt (exp, key) msg =
     let blocks = splitOn ' ' msg
         process :: [String] -> String
         process [] = ""
-        process (b : bs) =  numToAscii (fastRecSquareMod (read b :: Integer) exp key) ++ process bs
+        process (b : bs) = numToAscii (fastRecSquareMod (read b :: Integer) exp key) ++ process bs
     in process blocks
     
     
 main = do 
-    g <- initStdGen
-    let (e, n, d) = keygen 2048 g
-    print $  decrypt (d, n) (encrypt (e, n) "Vivamus non lacus porttitor, venenatis quam nec, fringilla lectus. Cras vel massa ac ipsum sodales facilisis non sed ante. Proin faucibus, leo a rhoncus semper, velit nisl molestie augue, sed pharetra leo enim sed ligula. Vivamus ac gravida eros. Vivamus nibh tellus, fringilla sed tempor at, congue fringilla justo. Morbi quis volutpat lacus. Morbi posuere consequat fermentum. Proin varius ut justo eu sagittis. Mauris vestibulum mauris quis nisl iaculis, fermentum tempus nunc pharetra. Nunc aliquam efficitur est, id dignissim nunc condimentum in. Curabitur tristique, arcu ac eleifend interdum, quam ex vehicula nibh, vitae faucibus ipsum sapien non eros. Vivamus aliquam lacus et turpis luctus, quis ornare felis iaculis. Vivamus pretium dolor ac leo maximus, in cursus massa.")
+    args <- getArgs
+    case args of
+        ["-keygen", bitL] -> do
+            g <- initStdGen
+            let (e, n, d) = keygen (read bitL :: Integer) g
+                pubFile = "pub.key"
+                privFile = "priv.key"
+            writeFile pubFile (show e ++ "\n" ++ show n)
+            writeFile privFile (show d ++ "\n" ++ show n)
+            putStrLn "Success."
+        ["-encrypt", keyFile, content] -> do 
+            keyString <- readFile keyFile
+            fileString <- readFile content
+            let keys = splitOn '\n' keyString
+                exp = read (head keys)
+                key = read ((head . drop 1) keys)
+            writeFile "encrypted.txt" (encrypt (exp, key) fileString)
+            putStrLn "Success."
+        ["-decrypt", keyFile, content] -> do 
+            keyString <- readFile keyFile
+            fileString <- readFile content
+            let keys = splitOn '\n' keyString
+                exp = read (head keys)
+                key = read ((head . drop 1) keys)
+            writeFile "decrypted.txt" (decrypt (exp, key) fileString)
+            putStrLn "Success."
+        _ -> do
+            putStrLn "Usage:"
+            putStrLn "rsa -keygen [n]      Generate keys of bit-length n to files pub.key and priv.key respectively."
+            putStrLn "rsa -encrypt [KEY] [FILE]     Encrypt the given file contents with the key into a file \"encrypted.txt\". Public key can be used for encryption, private key for signing."
+            putStrLn "rsa -decrypt [KEY] [FILE]    Decrypt the given file contents with the key into a file \"decrypted.txt\"."
