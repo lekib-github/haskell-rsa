@@ -27,7 +27,7 @@ fastRecSquareMod x n m
     | otherwise = (x * fastRecSquareMod (x^2 `mod` m) ((n-1) `div` 2) m) `mod` m
 
 -- Miller-Rabin Monte Carlo primality test
-mrPrimeTest :: Integer -> Integer -> StdGen -> Bool
+mrPrimeTest :: Integer -> Int -> StdGen -> Bool
 mrPrimeTest n k g =
     let -- Decomposition of n-1 into s and d for Miller-Rabin (n-1 = 2^s * d)
         primeDecomp :: Integer -> Integer -> (Integer, Integer)
@@ -35,20 +35,18 @@ mrPrimeTest n k g =
             | n `mod` 2 == 1 = if s == 0 then primeDecomp (n-1) s else (s, n) 
             | otherwise = primeDecomp (n `div` 2) (s+1)
         (s, d) = primeDecomp n 0
-        darts = randomRs (2, n-2) g
-        throw :: Integer -> [Integer] -> Bool
-        throw 0 _ = True
-        throw k darts = 
-            let a = head darts
-                x = fastRecSquareMod a d n
+        darts = take k (randomRs (2, n-2) g)
+        throw :: Integer -> Bool
+        throw dart = 
+            let x = fastRecSquareMod dart d n
                 score :: Integer -> Integer -> Bool
                 score s x
                     | s == 0 = y == 1
                     | y == 1 && x /= 1 && x /= n-1 = False
                     | otherwise = score (s-1) y
                     where y = x `mod` n * x `mod` n
-            in if score s x then throw (k-1) (tail darts) else False
-    in throw k darts
+            in score s x
+    in all throw darts
 
 -- RSA key generation - (e, n) public key, (d, n) private key
 keygen :: Integer -> StdGen -> (Integer, Integer, Integer)
@@ -67,13 +65,16 @@ keygen len g =
     in (e, n, d)
 
 
-asciiToNum :: String -> Integer
-asciiToNum "" = 0
-asciiToNum (c : str) = (toInteger (ord c)) * 256^(length str) + asciiToNum str
+asciiToNum :: String -> Integer -> Integer
+asciiToNum "" n = n
+asciiToNum (c : str) n = asciiToNum str ((toInteger (ord c)) + n * 256)
 
 numToAscii :: Integer -> String
-numToAscii 0 = ""
-numToAscii n = numToAscii (n `div` 256) ++ [chr (fromInteger n `mod` 256)]
+numToAscii n = 
+    let accumHelp ::Integer -> String
+        accumHelp 0 = ""
+        accumHelp n = chr (fromInteger n `mod` 256) : accumHelp (n `div` 256)
+    in reverse (accumHelp n)
 
 encrypt :: (Integer, Integer) -> String -> String
 encrypt (exp, key) msg = 
@@ -84,30 +85,29 @@ encrypt (exp, key) msg =
         process :: String -> String
         process "" = ""
         process msg = 
-            let split = splitAt (fromInteger blockN) msg
-            in show (fastRecSquareMod (asciiToNum (fst split)) exp key) ++ (' ' : process (snd split))
+            let (block, rest) = splitAt (fromInteger blockN) msg
+            in show (fastRecSquareMod (asciiToNum block 0) exp key) ++ (' ' : process rest)
     in process msg
-
-splitOn :: Char -> String -> [String]
-splitOn _ "" = []
-splitOn delim str =
-    let gatherToDelim :: String -> String
-        gatherToDelim "" = ""
-        gatherToDelim (c : cs)
-            | c == delim = ""
-            | otherwise = c : gatherToDelim cs
-    in gatherToDelim str : splitOn delim (drop (length (gatherToDelim str) + 1) str)
 
 decrypt :: (Integer, Integer) -> String -> String
 decrypt (exp, key) msg = 
-    let blocks = splitOn ' ' msg
+    let blocks = words msg
         process :: [String] -> String
         process [] = ""
         process (b : bs) = numToAscii (fastRecSquareMod (read b :: Integer) exp key) ++ process bs
     in process blocks
-    
-    
+
+
 main = do 
+    let extractKeyAndContent :: String -> String -> IO (Integer, Integer, String)
+        extractKeyAndContent keyFile contentFile = do
+            keyString <- readFile keyFile
+            fileString <- readFile contentFile
+            let keys = lines keyString
+                exp = read (head keys)
+                key = read ((head . drop 1) keys)
+            return (exp, key, fileString)
+
     args <- getArgs
     case args of
         ["-keygen", bitL] -> do
@@ -115,27 +115,17 @@ main = do
             let (e, n, d) = keygen (read bitL :: Integer) g
                 pubFile = "pub.key"
                 privFile = "priv.key"
-            writeFile pubFile (show e ++ "\n" ++ show n)
-            writeFile privFile (show d ++ "\n" ++ show n)
+            writeFile pubFile (show e ++ "\n" ++ show n ++ "\n")
+            writeFile privFile (show d ++ "\n" ++ show n ++ "\n")
             putStrLn "Success."
-        ["-encrypt", keyFile, content] -> do 
-            keyString <- readFile keyFile
-            fileString <- readFile content
-            let keys = splitOn '\n' keyString
-                exp = read (head keys)
-                key = read ((head . drop 1) keys)
-            writeFile "encrypted.txt" (encrypt (exp, key) fileString)
-            putStrLn "Success."
-        ["-decrypt", keyFile, content] -> do 
-            keyString <- readFile keyFile
-            fileString <- readFile content
-            let keys = splitOn '\n' keyString
-                exp = read (head keys)
-                key = read ((head . drop 1) keys)
-            writeFile "decrypted.txt" (decrypt (exp, key) fileString)
-            putStrLn "Success."
+        ["-encrypt", keyFile, contentFile] -> do 
+            (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
+            putStrLn ((encrypt (exp, key) contentString))
+        ["-decrypt", keyFile, contentFile] -> do 
+            (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
+            putStrLn (decrypt (exp, key) contentString)
         _ -> do
             putStrLn "Usage:"
-            putStrLn "rsa -keygen [n]      Generate keys of bit-length n to files pub.key and priv.key respectively."
-            putStrLn "rsa -encrypt [KEY] [FILE]     Encrypt the given file contents with the key into a file \"encrypted.txt\". Public key can be used for encryption, private key for signing."
+            putStrLn "rsa -keygen [n]      Generate keys of bit-length n to files pub.key and priv.key respectively.\n"
+            putStrLn "rsa -encrypt [KEY] [FILE]     Encrypt the given file contents with the key into a file \"encrypted.txt\". Public key can be used for encryption, private key for signing.\n"
             putStrLn "rsa -decrypt [KEY] [FILE]    Decrypt the given file contents with the key into a file \"decrypted.txt\"."
