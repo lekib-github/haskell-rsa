@@ -1,12 +1,7 @@
-import Prelude hiding (gcd)
 import System.Random
 import Data.Char
 import System.Environment
 
--- Euclid's algorithm for GCD
-gcd :: Integer -> Integer -> Integer
-gcd a 0 = a
-gcd a b = gcd b (a `mod` b)
 
 -- Extended Euclid's algorithm for computing the multiplicative inverse, d, of e (mod t).
 -- Only for coprime e and t!! - d ≡ e^(−1) (mod λ(n))
@@ -51,12 +46,15 @@ mrPrimeTest n k g =
 -- RSA key generation - (e, n) public key, (d, n) private key
 keygen :: Integer -> StdGen -> (Integer, Integer, Integer)
 keygen len g = 
-    let (p, q) = (head [n | n <- randomRs (2^(len `div` 2), 2^(len `div` 2 + 1)) g, mrPrimeTest n 10 g],
-                  head (tail [n | n <- randomRs (2^(len `div` 2 + len `mod` 2), 2^(len `div` 2 + len `mod` 2 + 1)) g, mrPrimeTest n 10 g]))
+    let lenDiv2 = len `div` 2
+        lenMod2 = len `mod` 2
+        (p, q) = (head [n | n <- randomRs (2^lenDiv2, 2^(lenDiv2 + 1)) g, mrPrimeTest n 10 g],
+                  head (tail [n | n <- randomRs (2^(lenDiv2 + lenMod2), 2^(lenDiv2 + lenMod2 + 1)) g, 
+                  mrPrimeTest n 10 g]))
         n = p * q
         -- Carmichael's totient function FOR PRIME FACTORS of n:
-        -- n = pq, λ(n) = lcm(λ(p), λ(q)), and since p and q are prime, λ(p) = φ(p) = p − 1, and likewise λ(q) = q − 1. 
-        -- Hence λ(n) = lcm(p − 1, q − 1). 
+        -- n = pq, λ(n) = lcm(λ(p), λ(q)), and since p and q are prime, λ(p) = φ(p) = p − 1, 
+        -- and likewise λ(q) = q − 1. Hence λ(n) = lcm(p − 1, q − 1). 
         ctf :: Integer -> Integer -> Integer
         ctf p q = ((p - 1) * (q - 1)) `div` (gcd (p - 1) (q - 1)) -- lcm(p-1, q-1)
         totient_n = ctf p q
@@ -103,9 +101,7 @@ main = do
         extractKeyAndContent keyFile contentFile = do
             keyString <- readFile keyFile
             fileString <- readFile contentFile
-            let keys = lines keyString
-                exp = read (head keys)
-                key = read ((head . drop 1) keys)
+            let exp : key : _ = map read (lines keyString)
             return (exp, key, fileString)
 
     args <- getArgs
@@ -115,17 +111,17 @@ main = do
             let (e, n, d) = keygen (read bitL :: Integer) g
                 pubFile = "pub.key"
                 privFile = "priv.key"
-            writeFile pubFile (show e ++ "\n" ++ show n ++ "\n")
-            writeFile privFile (show d ++ "\n" ++ show n ++ "\n")
+            writeFile pubFile (unlines [show e, show n])
+            writeFile privFile (unlines [show d, show n])
             putStrLn "Success."
         ["-encrypt", keyFile, contentFile] -> do 
             (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
             putStrLn ((encrypt (exp, key) contentString))
         ["-decrypt", keyFile, contentFile] -> do 
             (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
-            putStrLn (decrypt (exp, key) contentString)
+            putStr (decrypt (exp, key) contentString)
         _ -> do
             putStrLn "Usage:"
             putStrLn "rsa -keygen [n]      Generate keys of bit-length n to files pub.key and priv.key respectively.\n"
-            putStrLn "rsa -encrypt [KEY] [FILE]     Encrypt the given file contents with the key into a file \"encrypted.txt\". Public key can be used for encryption, private key for signing.\n"
-            putStrLn "rsa -decrypt [KEY] [FILE]    Decrypt the given file contents with the key into a file \"decrypted.txt\"."
+            putStrLn "rsa -encrypt [KEY] [FILE]     Encrypt the given file contents with the key to std out. Public key can be used for encryption, private key for signing.\n"
+            putStrLn "rsa -decrypt [KEY] [FILE]    Decrypt the given file contents with the key to std out"
