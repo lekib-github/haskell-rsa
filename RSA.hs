@@ -8,8 +8,10 @@ import System.Environment
 exEuc :: Integer -> Integer -> Integer
 exEuc e t =
     let process :: Integer -> Integer -> Integer -> Integer -> Integer
-        process d _ t' 0 = if t' > 1 then error "e noninvertible!!" else 
-                          if d < 0 then d + t else d
+        process d _ t' 0
+            | t' > 1 = error "e noninvertible!!"
+            | d < 0 = d + t
+            | otherwise = d
         process d d' t e = let q = t `div` e
                            in process d' (d - q * d') e (t - q * e)
     in process 0 1 t e
@@ -56,7 +58,7 @@ keygen len g =
         -- n = pq, λ(n) = lcm(λ(p), λ(q)), and since p and q are prime, λ(p) = φ(p) = p − 1, 
         -- and likewise λ(q) = q − 1. Hence λ(n) = lcm(p − 1, q − 1). 
         ctf :: Integer -> Integer -> Integer
-        ctf p q = ((p - 1) * (q - 1)) `div` (gcd (p - 1) (q - 1)) -- lcm(p-1, q-1)
+        ctf p q = ((p - 1) * (q - 1)) `div` gcd (p - 1) (q - 1) -- lcm(p-1, q-1)
         totient_n = ctf p q
         e = 2^16 + 1
         d = exEuc e totient_n
@@ -65,7 +67,7 @@ keygen len g =
 
 asciiToNum :: String -> Integer -> Integer
 asciiToNum "" n = n
-asciiToNum (c : str) n = asciiToNum str ((toInteger (ord c)) + n * 256)
+asciiToNum (c : str) n = asciiToNum str (toInteger (ord c) + n * 256)
 
 numToAscii :: Integer -> String
 numToAscii n = 
@@ -79,7 +81,7 @@ encrypt (exp, key) msg =
     let bits :: Integer -> Integer
         bits 0 = 0
         bits n = bits (n `div` 2) + 1
-        blockN = (bits key)`div` 8
+        blockN = bits key `div` 8
         process :: String -> String
         process "" = ""
         process msg = 
@@ -116,7 +118,7 @@ main = do
             putStrLn "Success."
         ["-encrypt", keyFile, contentFile] -> do 
             (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
-            putStrLn ((encrypt (exp, key) contentString))
+            putStrLn (encrypt (exp, key) contentString)
         ["-decrypt", keyFile, contentFile] -> do 
             (exp, key, contentString) <- extractKeyAndContent keyFile contentFile
             putStr (decrypt (exp, key) contentString)
