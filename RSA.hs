@@ -48,11 +48,10 @@ mrPrimeTest n k g =
 -- RSA key generation - (e, n) public key, (d, n) private key
 keygen :: Integer -> StdGen -> (Integer, Integer, Integer)
 keygen len g = 
-    let lenDiv2 = len `div` 2
-        lenMod2 = len `mod` 2
-        (p, q) = (head [n | n <- randomRs (2^lenDiv2, 2^(lenDiv2 + 1)) g, mrPrimeTest n 10 g],
-                  head (tail [n | n <- randomRs (2^(lenDiv2 + lenMod2), 2^(lenDiv2 + lenMod2 + 1)) g, 
-                  mrPrimeTest n 10 g]))
+    let pPow = len `div` 2
+        qPow = pPow + len `mod` 2
+        (p:_) = [n | n <- randomRs (2^pPow, 2^(pPow + 1)) g, mrPrimeTest n 10 g]
+        (_:q:_) = [n | n <- randomRs (2^qPow, 2^(qPow+1)) g, mrPrimeTest n 10 g]
         n = p * q
         -- Carmichael's totient function FOR PRIME FACTORS of n:
         -- n = pq, λ(n) = lcm(λ(p), λ(q)), and since p and q are prime, λ(p) = φ(p) = p − 1, 
